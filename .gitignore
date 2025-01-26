@@ -1,0 +1,9 @@
+*.o
+*.so
+*.dll
+*.exe
+.vscode
+membench*64*
+membench*32*
+memtest*64*
+memtest*32*
