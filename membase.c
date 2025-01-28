@@ -151,7 +151,11 @@ static inline void *memop_scalar(void *dst, const void *src, size_t n, int direc
     char *d = (char *)dst + (unlikely(direction) ? n : 0);
     const char *s = (const char *)src + (unlikely(direction) ? n : 0);
 
-    COPY_DIR(d, s, n, 32, direction);
+    while (n >= 32)
+    {
+        COPY_DIR(d, s, n, 32, direction);
+    }
+
     COPY_DIR(d, s, n, 16, direction);
     COPY_DIR(d, s, n, 8, direction);
     COPY_DIR(d, s, n, 4, direction);
