@@ -2,7 +2,7 @@
 # can also "make" directly on windows if clang and some cygwin tools (i.e. make, rm) are in the path
 
 ifneq ($(MAKECMDGOALS),nodlsym)
-    CFLAGS := -DSHARED $(CFLAGS)
+	CFLAGS := -DSHARED $(CFLAGS)
 	SID :=
 else
 	SID := s
@@ -17,22 +17,22 @@ ifneq ($(CROSS), 0)
 endif
 
 ifeq ($(OS),Windows_NT)
-    CC := winegcc
-    DETECTED_OS := Windows
-    TARGET_SUFFIX := -windows-msvc
-    EXE_EXT := .exe
-    RM := rm -f
+	CC := winegcc
+	DETECTED_OS := Windows
+	TARGET_SUFFIX := -windows-msvc
+	EXE_EXT := .exe
+	RM := rm -f
 	LDFLAGS := -Wl,/SAFESEH:NO $(LDFLAGS)
 	SHARED_LIB_FLAGS := -shared -Wl,--image-base,0x180000000 -Wl,-dynamicbase:no -Wl,--section-alignment,4096 -mllvm -align-all-nofallthru-blocks=9
-    SHARED_LIB_EXT := .dll
+	SHARED_LIB_EXT := .dll
 else
-    CC := clang
-    DETECTED_OS := $(shell uname -s)
-    TARGET_SUFFIX := -linux-gnu
-    EXE_EXT :=
-    RM := rm -f
+	CC := clang
+	DETECTED_OS := $(shell uname -s)
+	TARGET_SUFFIX := -linux-gnu
+	EXE_EXT :=
+	RM := rm -f
 	SHARED_LIB_FLAGS := -shared -fno-PIC -Wl,--section-start=.text=0x1000 -mllvm -align-all-nofallthru-blocks=9
-    SHARED_LIB_EXT := .so
+	SHARED_LIB_EXT := .so
 endif
 
 ARCH ?= native
@@ -52,9 +52,9 @@ ASAN_FLAGS_64 := $(ASAN_FLAGS) --target=$(TARGET_64)
 ASAN_FLAGS_32 := $(ASAN_FLAGS) --target=$(TARGET_32)
 
 ifeq ($(DETECTED_OS),Windows)
-    MATH_LIB :=
+	MATH_LIB :=
 else
-    MATH_LIB := -lm
+	MATH_LIB := -lm
 endif
 
 TEST_SOURCES := memtest.c
@@ -62,10 +62,10 @@ BENCH_SOURCES := membench.c
 BASE_SOURCES := membase.c membase.h
 
 ifeq ($(DETECTED_OS),Windows)
-    ASAN_BINS :=
+	ASAN_BINS :=
 	TEST_BINS :=
 else
-    ASAN_BINS := memtest64_asan memtest32_asan
+	ASAN_BINS := memtest64_asan memtest32_asan
 	TEST_BINS := memtest64 memtest32
 endif
 
