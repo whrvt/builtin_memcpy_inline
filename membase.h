@@ -23,7 +23,6 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <immintrin.h>
 
 #define NOBUILTIN [[clang::no_builtin("memcpy", "memmove", "memset", "memcmp")]]
 
@@ -49,6 +48,7 @@
 #endif
 
 #ifdef _WIN32
+#include <intrin.h>
 #ifdef SHARED
 #define MEMAPI __declspec(dllexport)
 #else
@@ -58,56 +58,54 @@
 #define MEMAPI __attribute__((visibility("default")))
 #endif
 
-#if defined(_WIN32) && !__has_builtin(__cpu_has_feature)
-#include <intrin.h>
+#if defined(_WIN32) || !__has_builtin(__builtin_cpu_supports)
 
-static int initialized = 0;
-
-static struct
-{
-    unsigned char sse2;
-    unsigned char avx2;
-    unsigned char avx512f;
-} cpu_features = {0};
-
-static inline void cpufeat_init(void)
-{
-    int regs[4];
-    int extended_regs[4];
-
-    __cpuid(regs, 1);
-    __cpuidex(extended_regs, 7, 0);
-
-    const int edx_features = regs[3];
-    const int ecx_features = regs[2];
-    const int ebx_features = extended_regs[1];
-
-    cpu_features.sse2 = !!(edx_features & (1 << 26));
-    cpu_features.avx2 = (ecx_features & (1 << 28)) &&
-                        (ebx_features & (1 << 5));
-    cpu_features.avx512f = !!(ebx_features & (1 << 16));
-
-    initialized = 1;
-}
-
-static FORCEINLINE int __builtin_cpu_supports(const char *feature)
-{
-    if (likely(initialized))
-    switch (feature[0])
-    {
-    case 's':
-        return cpu_features.sse2;
-    case 'a':
-        return feature[4] ? cpu_features.avx512f : cpu_features.avx2;
-    default:
-        return 0;
-    }
-    cpufeat_init();
-    return __builtin_cpu_supports(feature);
-}
+#if !__has_builtin(__cpuidex)
+#if defined(_MSC_VER) && !defined(__clang__)
+void __cpuidex(int info[4], int ax, int cx);
+#pragma intrinsic(__cpuidex)
+#else
+#define __cpuidex(info, ax, cx) __asm__("cpuid" : "=a"(info[0]), "=b"(info[1]), "=c"(info[2]), "=d"(info[3]) : "a"(ax), "c"(cx))
+#endif
 #endif
 
+#if !__has_builtin(__cpuid)
+#if defined(_MSC_VER) && !defined(__clang__)
+void __cpuid(int info[4], int ax);
+#pragma intrinsic(__cpuid)
+#else
+#define __cpuid(info, ax) __cpuidex(info, ax, 0)
+#endif
+#endif
+
+#endif
+
+static inline int cpu_supports(const int featurelevel)
+{
+    static int cpu_featurelevel = -1;
+    if (unlikely(cpu_featurelevel < 0))
+    {
+        cpu_featurelevel = 0;
+#if defined(_WIN32) || !__has_builtin(__builtin_cpu_supports)
+        int regs[4];
+        int extended_regs[4];
+
+        __cpuid(regs, 1);
+        __cpuidex(extended_regs, 7, 0);
+
+        const int edx_features = regs[3];
+        const int ecx_features = regs[2];
+        const int ebx_features = extended_regs[1];
+
+        cpu_featurelevel += !!(edx_features & (1 << 26)) + (ecx_features & (1 << 28)) && (ebx_features & (1 << 5)) + !!(ebx_features & (1 << 16));
+#else
+        cpu_featurelevel += __builtin_cpu_supports("avx512f") + __builtin_cpu_supports("avx2") + __builtin_cpu_supports("sse2");
+#endif
+    }
+    return (cpu_featurelevel >= featurelevel);
+}
+
 #ifndef SHARED
-void MEMAPI *memcpy_local(void *dst, const void *src, size_t n);
-void MEMAPI *memmove_local(void *dst, const void *src, size_t n);
+NOINLINE void MEMAPI *memcpy_local(void *dst, const void *src, size_t n);
+NOINLINE void MEMAPI *memmove_local(void *dst, const void *src, size_t n);
 #endif

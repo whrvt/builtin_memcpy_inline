@@ -18,7 +18,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include <immintrin.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -27,7 +26,8 @@
 #include "membench.h"
 
 #ifndef SHARED
-#include "membase.h"
+void *memcpy_local(void *dst, const void *src, size_t n);
+void *memmove_local(void *dst, const void *src, size_t n);
 #endif
 
 #define ALIGNMENT_HEADER "transfer size : test case       |   best GB/s   worst GB/s   avg GB/s\n"

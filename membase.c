@@ -26,6 +26,10 @@
 
 #define BASE_ALIGNMENT 16
 
+#define FEAT_AVX512 3
+#define FEAT_AVX2 2
+#define FEAT_SSE2 1
+
 #define AVX512_VECTOR_BITS 9
 #define AVX2_VECTOR_BITS 8
 #define SSE2_VECTOR_BITS 7
@@ -54,56 +58,58 @@
         }                                        \
     } while (0)
 
-#define COPY_DIR(d, s, n, size, direction)    \
-    do                                        \
-    {                                         \
-        if (likely(!direction))               \
-            MEMCPY_STEP_FWD(d, s, n, size);   \
-        else                                  \
-            MEMCPY_STEP_BWD(d, s, n, size);   \
+#define COPY_DIR(d, s, n, size, direction)  \
+    do                                      \
+    {                                       \
+        if (likely(!direction))             \
+            MEMCPY_STEP_FWD(d, s, n, size); \
+        else                                \
+            MEMCPY_STEP_BWD(d, s, n, size); \
     } while (0)
 
-#define IMPLEMENT_MEMOP(suffix, vector_size)                                               \
-    NOBUILTIN [[gnu::aligned(vector_size)]]                                                \
-    static void *memop_##suffix(void *dst, const void *src, size_t n, int direction)       \
-    {                                                                                      \
-        char *d = (char *)dst + (unlikely(direction) ? n : 0);             \
-        const char *s = (const char *)src + (unlikely(direction) ? n : 0); \
-                                                                                           \
-        /* vector-sized copies in groups of 4 for better pipelining */                     \
-        while (n >= 4 * vector_size)                                                       \
-        {                                                                                  \
-            COPY_DIR(d, s, n, vector_size, direction);                                     \
-            COPY_DIR(d, s, n, vector_size, direction);                                     \
-            COPY_DIR(d, s, n, vector_size, direction);                                     \
-            COPY_DIR(d, s, n, vector_size, direction);                                     \
-        }                                                                                  \
-                                                                                           \
-        /* remaining vectors */                                                            \
-        while (n >= vector_size)                                                           \
-        {                                                                                  \
-            COPY_DIR(d, s, n, vector_size, direction);                                     \
-        }                                                                                  \
-                                                                                           \
-        /* remaining bytes */                                                              \
-        COPY_DIR(d, s, n, 32, direction);                                                  \
-        COPY_DIR(d, s, n, 16, direction);                                                  \
-        COPY_DIR(d, s, n, 8, direction);                                                   \
-        COPY_DIR(d, s, n, 4, direction);                                                   \
-        COPY_DIR(d, s, n, 2, direction);                                                   \
-        COPY_DIR(d, s, n, 1, direction);                                                   \
-                                                                                           \
-        return dst;                                                                        \
+#define IMPLEMENT_MEMOP(maybe_inlineable, suffix, vector_size)                                        \
+    NOBUILTIN [[gnu::aligned(vector_size)]]                                                           \
+    static maybe_inlineable void *memop_##suffix(void *dst, const void *src, size_t n, int direction) \
+    {                                                                                                 \
+        char *d = (char *)dst + (unlikely(direction) ? n : 0);                                        \
+        const char *s = (const char *)src + (unlikely(direction) ? n : 0);                            \
+                                                                                                      \
+        /* vector-sized copies in groups of 4 for better pipelining */                                \
+        while (n >= 4 * vector_size)                                                                  \
+        {                                                                                             \
+            COPY_DIR(d, s, n, vector_size, direction);                                                \
+            COPY_DIR(d, s, n, vector_size, direction);                                                \
+            COPY_DIR(d, s, n, vector_size, direction);                                                \
+            COPY_DIR(d, s, n, vector_size, direction);                                                \
+        }                                                                                             \
+                                                                                                      \
+        /* remaining vectors */                                                                       \
+        while (n >= vector_size)                                                                      \
+        {                                                                                             \
+            COPY_DIR(d, s, n, vector_size, direction);                                                \
+        }                                                                                             \
+                                                                                                      \
+        /* remaining bytes */                                                                         \
+        COPY_DIR(d, s, n, 32, direction);                                                             \
+        COPY_DIR(d, s, n, 16, direction);                                                             \
+        COPY_DIR(d, s, n, 8, direction);                                                              \
+        COPY_DIR(d, s, n, 4, direction);                                                              \
+        COPY_DIR(d, s, n, 2, direction);                                                              \
+        COPY_DIR(d, s, n, 1, direction);                                                              \
+                                                                                                      \
+        return dst;                                                                                   \
     }
 
 #ifndef __AVX512F__
 #pragma clang attribute push(__attribute__((target("avx512f"))), apply_to = function)
-#define has_avx512f __builtin_cpu_supports("avx512f")
+#define has_avx512f cpu_supports(FEAT_AVX512)
+#define inlineable_avx512f
 #else
 #define has_avx512f 1
+#define inlineable_avx512f inline
 #endif
 
-IMPLEMENT_MEMOP(avx512, 1ULL << (AVX512_VECTOR_BITS - 3))
+IMPLEMENT_MEMOP(inlineable_avx512f, avx512, 1ULL << (AVX512_VECTOR_BITS - 3))
 
 #ifndef __AVX512F__
 #pragma clang attribute pop
@@ -111,12 +117,14 @@ IMPLEMENT_MEMOP(avx512, 1ULL << (AVX512_VECTOR_BITS - 3))
 
 #ifndef __AVX2__
 #pragma clang attribute push(__attribute__((target("avx2"))), apply_to = function)
-#define has_avx2 likely(__builtin_cpu_supports("avx2"))
+#define has_avx2 likely(cpu_supports(FEAT_AVX2))
+#define inlineable_avx2
 #else
 #define has_avx2 1
+#define inlineable_avx2 inline
 #endif
 
-IMPLEMENT_MEMOP(avx2, 1ULL << (AVX2_VECTOR_BITS - 3))
+IMPLEMENT_MEMOP(inlineable_avx2, avx2, 1ULL << (AVX2_VECTOR_BITS - 3))
 
 #ifndef __AVX2__
 #pragma clang attribute pop
@@ -124,12 +132,14 @@ IMPLEMENT_MEMOP(avx2, 1ULL << (AVX2_VECTOR_BITS - 3))
 
 #ifndef __SSE2__
 #pragma clang attribute push(__attribute__((target("sse2"))), apply_to = function)
-#define has_sse2 likely(__builtin_cpu_supports("sse2"))
+#define has_sse2 likely(cpu_supports(FEAT_SSE2))
+#define inlineable_sse2
 #else
 #define has_sse2 1
+#define inlineable_sse2 inline
 #endif
 
-IMPLEMENT_MEMOP(sse2, 1ULL << (SSE2_VECTOR_BITS - 3))
+IMPLEMENT_MEMOP(inlineable_sse2, sse2, 1ULL << (SSE2_VECTOR_BITS - 3))
 
 #ifndef __SSE2__
 #pragma clang attribute pop
@@ -151,7 +161,7 @@ static inline void *memop_scalar(void *dst, const void *src, size_t n, int direc
     return dst;
 }
 
-NOBUILTIN
+NOBUILTIN NOINLINE 
 void MEMAPI *memcpy_local(void *dst, const void *src, size_t n)
 {
     if (has_avx512f)
@@ -163,7 +173,7 @@ void MEMAPI *memcpy_local(void *dst, const void *src, size_t n)
     return memop_scalar(dst, src, n, 0);
 }
 
-NOBUILTIN
+NOBUILTIN NOINLINE 
 void MEMAPI *memmove_local(void *dst, const void *src, size_t n)
 {
     unsigned char *d = dst;

@@ -30,6 +30,14 @@
 # else
 #  define memlib "./libmembase64-windows-msvc.dll"
 # endif
+#elif defined(MUSL)
+# define stdlib "libc.so"
+# define stdlib_fb stdlib
+# ifdef __i386__
+#  define memlib "./libmembase32-linux-musl.so"
+# else
+#  define memlib "./libmembase64-linux-musl.so"
+# endif
 #else
 # define stdlib "libc.so.6"
 # define stdlib_fb stdlib
@@ -98,7 +106,7 @@ struct timespec_portable
 
 static inline void get_monotonic_time(struct timespec_portable *ts)
 {
-    _mm_mfence();
+    __asm__ __volatile__ ( "mfence" : : : "memory" );
 #ifdef _WIN32
     static LARGE_INTEGER freq;
     static int init = 0;
@@ -120,7 +128,7 @@ static inline void get_monotonic_time(struct timespec_portable *ts)
     ts->tv_sec = native_ts.tv_sec;
     ts->tv_nsec = native_ts.tv_nsec;
 #endif
-    _mm_mfence();
+    __asm__ __volatile__ ( "mfence" : : : "memory" );
 }
 
 static inline double timespec_to_seconds(const struct timespec_portable *start,
